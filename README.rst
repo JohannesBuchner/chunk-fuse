@@ -4,7 +4,7 @@ Block User Space Filesystem
 What does it do?
 -----------------
 
-Provides read/write access one large file of a specified length. The file is
+Provides read/write access to one large file of a specified length. The file is
 backed by a folder, in which the 4MB sized blocks it consists of are stored.
 
 The blocks are compressed transparently. In future, encryption may be added.
@@ -25,5 +25,15 @@ using lvm across the blocks, which will give you a RAID-like system.
  * Compressed
  * fully native POSIX filesystem of your choice (reiserfs, ext4, etc.)
 
+As a sketch::
+
+  Cloud service 
+     |
+  FUSE CloudFS: local folder 
+     |
+  BlockFS (this project): file
+     |
+  loop mount file as block, using normal file system (reiserfs, ext4); prepare with mkfs.*
+  or: use file as lvm block
 
 

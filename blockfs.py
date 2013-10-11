@@ -90,8 +90,8 @@ class Block(LoggingMixIn, Operations):
 				self.cache[i] = dict(data=buf, t_write=time(), t_read=time(), dirty=True)
 			else: # load
 				self.log.debug('loading chunk %d into cache' % i)
-				f = file(path, 'rb')
-				buf = zlib.decompress(f.read())
+				f = gzip.open(path, 'rb')
+				buf = f.read()
 				f.close()
 				self.cache[i] = dict(data=buf, t_write=time(), t_read=time(), dirty=False)
 		self.cache[i]['t_read'] = time()
@@ -231,6 +231,8 @@ if __name__ == '__main__':
 	
 	import logging
 	logging.basicConfig(filename='blockfs-debug.log',level=logging.DEBUG)
-	fuse = FUSE(Block(sys.argv[1], int(sys.argv[2])), sys.argv[3], debug=True, nothreads=True, foreground=True)
+	b = Block(sys.argv[1], int(sys.argv[2]))
+	fuse = FUSE(b, sys.argv[3], debug=True, nothreads=True, foreground=True,
+		allow_root=True)
 	
 
