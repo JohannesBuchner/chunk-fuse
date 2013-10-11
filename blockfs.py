@@ -61,6 +61,9 @@ class Block(LoggingMixIn, Operations):
 	def flush(self, path, fh):
 		return self._flush()
 
+	def destroy(self, path):
+		return self._flush(force_write=True)
+
 	def fsync(self, path, datasync, fh):
 		return self._flush()
 
@@ -117,7 +120,7 @@ class Block(LoggingMixIn, Operations):
 		self.log.debug('writing chunk %d done' % i)
 		return 0
 	
-	def _flush(self):
+	def _flush(self, force_write=False):
 		with self.rwlock:
 			self.log.debug('flushing...')
 			to_remove = []
@@ -127,7 +130,7 @@ class Block(LoggingMixIn, Operations):
 					self.log.debug('flushing: %d stale' % i)
 					if len(self.cache) > 10:
 						to_remove.append(i)
-				if time() - props['t_write'] > 3 and props['dirty']:
+				if (force_write or time() - props['t_write'] > 3) and props['dirty']:
 					self.log.debug('flushing: %d dirty' % i)
 					r = self.writeblock(i)
 					if r != 0:
