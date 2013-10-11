@@ -25,7 +25,7 @@ from Crypto.Cipher import AES
 import gc
 CHUNKSIZE = (1024 * 1024 * 4)
 
-class Block(LoggingMixIn, Operations):
+class BlockFS(LoggingMixIn, Operations):
 	"""
 	Provides a large data block. In the backing directory, 4MB blocks of
 	compressed, encrypted data are stored.
@@ -266,7 +266,7 @@ if __name__ == '__main__':
 			password = file(passwordfile, 'rb').read()
 		print 'using password', password
 		gc.collect()
-	b = Block(folder, nchunks, password)
+	b = BlockFS(folder, nchunks, password)
 	fuse = FUSE(b, mountdir, nothreads=True, foreground=True,
 		allow_root=True)
 	
