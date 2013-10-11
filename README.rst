@@ -38,12 +38,12 @@ As a sketch::
 
 Encryption / compression details
 ----------------------------------
- * Content is compressed before storage. zlib is used 
-   (you can use `zlib-flate -uncompress` to access the data)
- * When a password is specified, AES CBC is used from pycrypto. The IV is set to 
-   the block number. This constitutes symmetric encryption.
- * GPG was considered, but requires you to still have access to your secret gpg 
-   file -- which may not be true for backups.
+* Content is compressed before storage. zlib is used 
+  (you can use `zlib-flate -uncompress` to access the data)
+* When a password is specified, AES CBC is used from pycrypto. The IV is set to 
+  the block number. This constitutes symmetric encryption.
+* GPG was considered, but requires you to still have access to your secret gpg 
+  file -- which may not be true for backups.
 
 
 
