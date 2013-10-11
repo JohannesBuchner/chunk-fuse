@@ -79,7 +79,6 @@ class Block(LoggingMixIn, Operations):
 		return ['.', '..', 'block']
 	
 	def open(self, path, flags):
-		print 'open flags: ', flags
 		self.fd += 1
 		return self.fd
 	
@@ -131,7 +130,7 @@ class Block(LoggingMixIn, Operations):
 					if len(self.cache) > 10:
 						to_remove.append(i)
 				if (force_write or time() - props['t_write'] > 3) and props['dirty']:
-					self.log.debug('flushing: %d dirty' % i)
+					self.log.info('flushing: %d dirty' % i)
 					r = self.writeblock(i)
 					if r != 0:
 						self.log.debug('flushing: %d writing failed' % i)
@@ -143,7 +142,7 @@ class Block(LoggingMixIn, Operations):
 		return 0
 	
 	def getblock(self, offset, size):
-		self.log.debug('get block %d %d' % (offset, size))
+		self.log.debug('getblock getting data from %d %d' % (offset, size))
 		data = b''
 		# merge into contiguous
 		for i in range(offset / CHUNKSIZE, (offset + size) / CHUNKSIZE + 1):
@@ -151,8 +150,7 @@ class Block(LoggingMixIn, Operations):
 		# get right part
 		begin = offset % CHUNKSIZE
 		r =  data[begin:begin + size]
-		self.log.debug('get block %d %d done; returning %d bytes' % (offset, size, len(r)))
-		self.log.debug('read data: %s' % r)
+		self.log.debug('getblock %d %d done; returning %d bytes' % (offset, size, len(r)))
 		return r
 	
 	def createblocks(self, offset, data):
@@ -164,12 +162,12 @@ class Block(LoggingMixIn, Operations):
 		
 		for i in range(offset / CHUNKSIZE, (offset + size) / CHUNKSIZE + 1):
 			chunk = self.cached_chunk(i)
-			length = min(CHUNKSIZE - begin, begin + sizeleft)
+			length = min(CHUNKSIZE - begin, sizeleft)
 			# take from data[databegin:databegin + length]
 			# write to begin:min(begin + size, CHUNKSIZE)
 			
 			if chunk['data'][begin:begin + length] != data[databegin:databegin + length]:
-				self.log.debug('modifying block %d' % i)
+				self.log.debug('modifying block %d: chunk %d : %d <- data %d : %d' % (i, begin, begin + length, databegin, databegin + length))
 				chunk['age'] = time()
 				chunk['dirty'] = True
 				chunk['data'] = chunk['data'][0:begin] + \
@@ -187,15 +185,11 @@ class Block(LoggingMixIn, Operations):
 	def read(self, path, size, offset, fh):
 		self.log.debug('read of %s @%d %d' % (path, offset, size))
 		with self.rwlock:
-			r = self.getblock(offset, size)
-			self.log.debug('read of %s @%d %d done' % (path, offset, size))
-			self.log.debug('return value checks: %s, %s' % (True if r else False, len(r) == size) )
-			return r
-		self.log.debug('read of %s @%d %d failed!' % (path, offset, size))
+			return self.getblock(offset, size)
+		self.log.error('read of %s @%d %d failed!' % (path, offset, size))
 		raise FuseOSError(EROFS)
 	
 	def write(self, path, data, offset, fh):
-		self.log.debug('write of %s @%d' % (path, offset))
 		with self.rwlock:
 			return self.createblocks(offset, data)
 		raise FuseOSError(EROFS)
@@ -214,6 +208,7 @@ class Block(LoggingMixIn, Operations):
 		return dict(f_bsize=CHUNKSIZE, f_blocks=self.nchunks, f_bavail=0)
 		
 	def truncate(self, path, length, fh=None):
+		raise FuseOSError(EROFS)
 		self.log.debug('truncate :/')
 		with self.rwlock:
 			# set rest of last block to 0
@@ -233,9 +228,9 @@ if __name__ == '__main__':
 		sys.exit(1)
 	
 	import logging
-	logging.basicConfig(filename='blockfs-debug.log',level=logging.DEBUG)
+	logging.basicConfig(filename='blockfs-debug.log',level=logging.INFO)
 	b = Block(sys.argv[1], int(sys.argv[2]))
-	fuse = FUSE(b, sys.argv[3], debug=True, nothreads=True, foreground=True,
+	fuse = FUSE(b, sys.argv[3], nothreads=True, foreground=True,
 		allow_root=True)
 	
 
