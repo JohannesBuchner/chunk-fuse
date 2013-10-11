@@ -37,7 +37,7 @@ class Block(LoggingMixIn, Operations):
 		self.cache = {}
 		self.nchunks = nchunks
 		
-		self.key = password[:16]
+		self.key = password
 		now = time()
 		self.fileprops = dict(st_mode=(S_IFREG | 0755), st_nlink=1,
                                 st_size=nchunks * CHUNKSIZE, 
@@ -258,10 +258,10 @@ if __name__ == '__main__':
 	folder = sys.argv[1]
 	nchunks = int(sys.argv[2])
 	mountdir = sys.argv[3]
-	passwordfile = sys.argv[4]
-	if len(sys.argv) > 3:
+	if len(sys.argv) > 4:
+		passwordfile = sys.argv[4]
 		if len(file(passwordfile, 'rb').read()) != 16:
-			password = hashlib.sha256(file(passwordfile, 'rb').read()).digest()
+			password = hashlib.sha256(file(passwordfile, 'rb').read()).digest()[:16]
 		else:
 			password = file(passwordfile, 'rb').read()
 		print 'using password', password
