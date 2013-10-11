@@ -18,8 +18,11 @@ def forbidden(*args, **kwargs):
 def empty(*args, **kwargs):
 	return {}
 
-#import zlib
+import zlib
 import gzip
+import hashlib
+from Crypto.Cipher import AES
+import gc
 CHUNKSIZE = (1024 * 1024 * 4)
 
 class Block(LoggingMixIn, Operations):
@@ -27,12 +30,14 @@ class Block(LoggingMixIn, Operations):
 	Provides a large data block. In the backing directory, 4MB blocks of
 	compressed, encrypted data are stored.
 	"""
-	def __init__(self, root, nchunks):
+	def __init__(self, root, nchunks, password=None):
 		self.root = os.path.realpath(root)
 		self.rwlock = Lock()
 		self.fd = 0
 		self.cache = {}
 		self.nchunks = nchunks
+		
+		self.key = password[:16]
 		now = time()
 		self.fileprops = dict(st_mode=(S_IFREG | 0755), st_nlink=1,
                                 st_size=nchunks * CHUNKSIZE, 
@@ -40,7 +45,26 @@ class Block(LoggingMixIn, Operations):
                                 st_ctime=now, st_mtime=now, st_atime=now)
 		self.rootprops = dict(st_mode=(S_IFDIR | 0755), st_ctime=now, 
 			st_mtime=now, st_atime=now, st_nlink=2)
-
+	
+	def compress(self, data, i):
+		dataz =  zlib.compress(data)
+		if self.key:
+			# padding idea from https://gist.github.com/twkang/4417903
+			pad = 16 - len(dataz) % 16
+			dataz = dataz + pad * chr(pad)
+			iv = hashlib.sha256(str(i)).digest()[:16]
+			encryptor = AES.new(self.key, AES.MODE_CBC, iv)
+			dataz = encryptor.encrypt(dataz)
+		return dataz
+	def decompress(self, dataz, i):
+		if self.key:
+			iv = hashlib.sha256(str(i)).digest()[:16]
+			decryptor = AES.new(self.key, AES.MODE_CBC, iv)
+			dataz = decryptor.decrypt(dataz)
+			pad = ord(dataz[-1])
+			dataz = dataz[:-pad]
+		return zlib.decompress(dataz)
+	
 	def access(self, path, mode):
 		if not os.access(self.root, mode):
 			raise FuseOSError(EACCES)
@@ -92,8 +116,8 @@ class Block(LoggingMixIn, Operations):
 				self.cache[i] = dict(data=buf, t_write=time(), t_read=time(), dirty=True)
 			else: # load
 				self.log.debug('loading chunk %d into cache' % i)
-				f = gzip.open(path, 'rb')
-				buf = f.read()
+				f = file(path, 'rb')
+				buf = self.decompress(f.read(), i)
 				f.close()
 				self.cache[i] = dict(data=buf, t_write=time(), t_read=time(), dirty=False)
 		self.cache[i]['t_read'] = time()
@@ -108,8 +132,8 @@ class Block(LoggingMixIn, Operations):
 		self.log.debug('writing chunk %d onto fs' % i)
 		#data = zlib.compress(self.cache[i]['data'])
 		path = os.path.join(self.root, '%d.gz' % i)
-		f = gzip.open(path, 'wb')
-		f.write(self.cache[i]['data'])
+		f = file(path, 'wb')
+		f.write(self.compress(self.cache[i]['data'], i))
 		#f = file(path, 'wb')
 		#f.write(data)
 		f.flush()
@@ -223,14 +247,27 @@ class Block(LoggingMixIn, Operations):
 					os.unlink(path)
 
 if __name__ == '__main__':
-	if len(sys.argv) != 4:
-		print('usage: %s <folder> <nchunks> <mountpoint>' % sys.argv[0])
+	if not (len(sys.argv) == 4 or len(sys.argv) == 5):
+		print('usage: %s <folder> <nchunks> <mountpoint> [password-file]' % sys.argv[0])
 		sys.exit(1)
 	
 	import logging
 	logging.basicConfig(filename='blockfs-debug.log',level=logging.INFO)
-	b = Block(sys.argv[1], int(sys.argv[2]))
-	fuse = FUSE(b, sys.argv[3], nothreads=True, foreground=True,
+	
+	password = None
+	folder = sys.argv[1]
+	nchunks = int(sys.argv[2])
+	mountdir = sys.argv[3]
+	passwordfile = sys.argv[4]
+	if len(sys.argv) > 3:
+		if len(file(passwordfile, 'rb').read()) != 16:
+			password = hashlib.sha256(file(passwordfile, 'rb').read()).digest()
+		else:
+			password = file(passwordfile, 'rb').read()
+		print 'using password', password
+		gc.collect()
+	b = Block(folder, nchunks, password)
+	fuse = FUSE(b, mountdir, nothreads=True, foreground=True,
 		allow_root=True)
 	
 
